@@ -1,0 +1,37 @@
+#usda 1.0
+(
+    defaultPrim = "Villain"
+    metersPerUnit = 0.01
+)
+
+def Xform "World" (
+    documentation = "Scene2 world root"
+)
+{
+    def Xform "Villain" (
+        customData = {
+            string role = "antagonist"
+            int    evilLevel = 9000
+        }
+    )
+    {
+        def Mesh "Body" (
+            assetInfo = {
+                string creator = "ArtistB"
+                int    version = 2
+            }
+        )
+        {
+            uniform token[] purposes = ["render"]
+            rel physics:collision = </World/Villain/BodyPhysics>
+        }
+        def Xform "BodyPhysics" {}
+    }
+
+    def Light "SunLight" (
+        intensity = 100.0
+    )
+    {
+        token[] categories = ["environment", "lighting"]
+    }
+}

@@ -1,0 +1,40 @@
+#usda 1.0
+(
+    defaultPrim   = "World"
+    metersPerUnit = 0.01
+)
+
+def Xform "World" (
+    documentation = "Scene1 world root"
+)
+{
+    def Xform "Hero" (
+        customData  = {
+            string role     = "protagonist"
+            bool   hasSword = true
+        }
+        variantSets = ["helmetVariant"]
+    )
+    {
+        def Mesh "Body" (
+            assetInfo = {
+                string creator = "ArtistA"
+                int    version = 1
+            }
+        )
+        {
+            uniform token[] purposes          = ["render", "proxy"]
+            rel            physics:collision = </World/Hero/BodyPhysics>
+        }
+
+        def Xform "BodyPhysics" {}
+
+    }
+
+    def Camera "MainCamera" (
+        focalLength = 35.0
+    )
+    {
+        float aperture = 2.8
+    }
+}
