@@ -21,6 +21,8 @@
 
 
 import argparse
+from sitecustomize import new_prefix
+
 from pxr import Usd, Sdf
 
 
@@ -28,15 +30,16 @@ def copy_metadata(src, dst):
     """
     Copy all authored metadata from src-prim to dst-prim.
     """
+    custom_data_keys = ["comment", "documentation"]
     dst_keys = dst.GetAllMetadata().keys()
-    for key, srcVal in src.GetAllMetadata().items():
-        if key == "comment" or key not in dst_keys:
+    for key, src_val in src.GetAllMetadata().items():
+        if isinstance(src_val, Sdf.UnregisteredValue):
+            src_val = src_val.value
+        if key in custom_data_keys or key not in dst_keys:
             # Copy metadata if it's not already set on dst or is a comment
-            if isinstance(srcVal, Sdf.UnregisteredValue):
-                srcVal = srcVal.value
-            dst.SetCustomDataByKey(key, srcVal)
+            dst.SetCustomDataByKey(key, src_val)
         else:
-            dst.SetMetadata(key, srcVal)
+            dst.SetMetadata(key, src_val)
 
 
 def copy_relationships(src, dst):
@@ -44,8 +47,8 @@ def copy_relationships(src, dst):
     Copy all relationships (names & targets) from src-prim to dst-prim.
     """
     for rel in src.GetRelationships():
-        newRel = dst.CreateRelationship(rel.GetName())
-        newRel.SetTargets(rel.GetTargets())
+        new_rel = dst.CreateRelationship(rel.GetName())
+        new_rel.SetTargets(rel.GetTargets())
 
 
 def copy_variant_sets(src, dst):
@@ -53,52 +56,52 @@ def copy_variant_sets(src, dst):
     Copy all variant sets. For each variant, we select it on both
     src and dst, then recursively copy children authored inside that variant.
     """
-    srcVSets = src.GetVariantSets()
+    src_var_sets = src.GetVariantSets()
     dstVSets = dst.GetVariantSets()
 
     # Copy variant sets _on this prim_
-    for vsetName in srcVSets.GetNames():
-        srcVSet = srcVSets.GetVariantSet(vsetName)
-        dstVSet = dstVSets.AddVariantSet(vsetName)
+    for var_set_name in src_var_sets.GetNames():
+        src_var_set = src_var_sets.GetVariantSet(var_set_name)
+        dst_var_set = dstVSets.AddVariantSet(var_set_name)
 
         # Ensure all variants exist on dst
-        dst_names = dstVSet.GetVariantNames()
-        for v in srcVSet.GetVariantNames():
+        dst_names = dst_var_set.GetVariantNames()
+        for v in src_var_set.GetVariantNames():
             if v not in dst_names:
-                dstVSet.AddVariant(v)
+                dst_var_set.AddVariant(v)
 
         # Mirror the active selection
-        sel = srcVSet.GetVariantSelection()
+        sel = src_var_set.GetVariantSelection()
         if sel:
-            srcVSet.SetVariantSelection(sel)
-            dstVSet.SetVariantSelection(sel)
+            src_var_set.SetVariantSelection(sel)
+            dst_var_set.SetVariantSelection(sel)
 
         # Enter both edit contexts before recursing
-        with srcVSet.GetVariantEditContext(), \
-                dstVSet.GetVariantEditContext():
+        with src_var_set.GetVariantEditContext(), \
+                dst_var_set.GetVariantEditContext():
             # Recurse on children _within this variant_
             for child in src.GetChildren():
                 _copy_prim(child, dst.GetStage())
 
 
-def _copy_prim(srcPrim, dstStage):
+def _copy_prim(src_prim, dstStage):
     """
     Recursively copy a prim (and its subtree) from srcPrim's stage into dstStage
     at the same path, including type, metadata, relationships, variants, and children.
     """
-    path = srcPrim.GetPath()
-    primType = srcPrim.GetTypeName() or 'Xform'
-    dstPrim = dstStage.DefinePrim(path, primType)
+    path = src_prim.GetPath()
+    prim_type = src_prim.GetTypeName() or 'Xform'
+    dst_prim = dstStage.DefinePrim(path, prim_type)
 
     # metadata + relationships
-    copy_metadata(srcPrim, dstPrim)
-    copy_relationships(srcPrim, dstPrim)
+    copy_metadata(src_prim, dst_prim)
+    copy_relationships(src_prim, dst_prim)
 
     # variants
-    copy_variant_sets(srcPrim, dstPrim)
+    copy_variant_sets(src_prim, dst_prim)
 
     # children (outside variant edits)
-    for child in srcPrim.GetChildren():
+    for child in src_prim.GetChildren():
         _copy_prim(child, dstStage)
 
 
@@ -112,21 +115,21 @@ def main():
     args = parser.parse_args()
 
     # Create the output stage (overwrites if exists)
-    outStage = Usd.Stage.CreateNew(args.output)
+    out_stage = Usd.Stage.CreateNew(args.output)
 
     # Helper to open and copy every root-level prim
-    def mergeFile(usdaPath):
-        stage = Usd.Stage.Open(usdaPath)
-        pseudoRoot = stage.GetPseudoRoot()  # top of prim hierarchy
-        for prim in pseudoRoot.GetChildren():
-            _copy_prim(prim, outStage)
+    def mergeFile(usda_path):
+        stage = Usd.Stage.Open(usda_path)
+        pseudo_root = stage.GetPseudoRoot()  # top of prim hierarchy
+        for prim in pseudo_root.GetChildren():
+            _copy_prim(prim, out_stage)
 
     # Merge both scenes
     mergeFile(args.inputA)
     mergeFile(args.inputB)
 
     # Save
-    outStage.GetRootLayer().Save()
+    out_stage.GetRootLayer().Save()
     print(f"Composed {args.inputA} + {args.inputB} → {args.output}")
 
 

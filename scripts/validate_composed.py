@@ -27,106 +27,110 @@ import sys
 import argparse
 from pxr import Usd
 
-def validate_metadata(srcPrim, dstPrim, errors):
+def validate_metadata(src_prim, dst_prim, errors):
     """
     Compare all authored metadata on srcPrim vs dstPrim.
     """
-    for key, srcVal in srcPrim.GetAllMetadata().items():
-        dstVal = dstPrim.GetMetadata(key)
-        if srcVal != dstVal:
-            errors.append(f"Metadata mismatch at {srcPrim.GetPath()}: "
-                          f"'{key}' src={srcVal} vs dst={dstVal}")
+    for key, src_val in src_prim.GetAllMetadata().items():
+        dst_val = dst_prim.GetMetadata(key)
+        if src_val != dst_val:
+            errors.append(f"Metadata mismatch at {src_prim.GetPath()}: "
+                          f"'{key}' src={src_val} vs dst={dst_val}")
 
-def validate_relationships(srcPrim, dstPrim, errors):
+
+def validate_relationships(src_prim, dst_prim, errors):
     """
     Compare relationship names and target lists.
     """
-    srcRels = {r.GetName(): set(r.GetTargets())
-               for r in srcPrim.GetRelationships()}
-    dstRels = {r.GetName(): set(r.GetTargets())
-               for r in dstPrim.GetRelationships()}
+    src_rels = {r.GetName(): set(r.GetTargets())
+               for r in src_prim.GetRelationships()}
+    dst_rels = {r.GetName(): set(r.GetTargets())
+               for r in dst_prim.GetRelationships()}
 
     # missing or mismatched
-    for name, targets in srcRels.items():
-        if name not in dstRels:
-            errors.append(f"Missing relationship '{name}' at {srcPrim.GetPath()}")
-        elif dstRels[name] != targets:
-            errors.append(f"Relationship targets differ at {srcPrim.GetPath()}: "
-                          f"{name} src={targets} vs dst={dstRels[name]}")
+    for name, targets in src_rels.items():
+        if name not in dst_rels:
+            errors.append(f"Missing relationship '{name}' at {src_prim.GetPath()}")
+        elif dst_rels[name] != targets:
+            errors.append(f"Relationship targets differ at {src_prim.GetPath()}: "
+                          f"{name} src={targets} vs dst={dst_rels[name]}")
 
     # any extra in dst?
-    for name in dstRels.keys() - srcRels.keys():
-        errors.append(f"Extra relationship '{name}' at {srcPrim.GetPath()} in composed")
+    for name in dst_rels.keys() - src_rels.keys():
+        errors.append(f"Extra relationship '{name}' at {src_prim.GetPath()} in composed")
 
-def validate_variant_sets(srcPrim, dstPrim, errors):
+
+def validate_variant_sets(src_prim, dst_prim, errors):
     """
     Compare variant-set names, variant names, selections, and
     recursively validate contents for each variant.
     """
-    srcVS = srcPrim.GetVariantSets()
-    dstVS = dstPrim.GetVariantSets()
+    src_var_sets = src_prim.GetVariantSets()
+    dst_var_sets = dst_prim.GetVariantSets()
 
-    srcNames = set(srcVS.GetNames())
-    dstNames = set(dstVS.GetNames())
+    src_names = set(src_var_sets.GetNames())
+    dst_names = set(dst_var_sets.GetNames())
 
-    for name in srcNames - dstNames:
-        errors.append(f"Missing variant set '{name}' at {srcPrim.GetPath()}")
-    for name in dstNames - srcNames:
-        errors.append(f"Extra variant set '{name}' at {srcPrim.GetPath()}")
+    for name in src_names - dst_names:
+        errors.append(f"Missing variant set '{name}' at {src_prim.GetPath()}")
+    for name in dst_names - src_names:
+        errors.append(f"Extra variant set '{name}' at {src_prim.GetPath()}")
 
-    for name in srcNames & dstNames:
-        sV = srcVS.GetVariantSet(name)
-        dV = dstVS.GetVariantSet(name)
+    for name in src_names & dst_names:
+        src_var = src_var_sets.GetVariantSet(name)
+        dst_var = dst_var_sets.GetVariantSet(name)
 
         # variant name comparison
-        sVars = set(sV.GetVariantNames())
-        dVars = set(dV.GetVariantNames())
-        for v in sVars - dVars:
-            errors.append(f"Missing variant '{v}' in set '{name}' at {srcPrim.GetPath()}")
-        for v in dVars - sVars:
-            errors.append(f"Extra variant '{v}' in set '{name}' at {srcPrim.GetPath()}")
+        src_vars = set(src_var.GetVariantNames())
+        dst_vars = set(dst_var.GetVariantNames())
+        for v in src_vars - dst_vars:
+            errors.append(f"Missing variant '{v}' in set '{name}' at {src_prim.GetPath()}")
+        for v in dst_vars - src_vars:
+            errors.append(f"Extra variant '{v}' in set '{name}' at {src_prim.GetPath()}")
 
         # selection comparison
-        selSrc = sV.GetVariantSelection()
-        selDst = dV.GetVariantSelection()
-        if selSrc != selDst:
-            errors.append(f"Variant selection mismatch in '{name}' at {srcPrim.GetPath()}: "
-                          f"src='{selSrc}' vs dst='{selDst}'")
+        sel_src = src_var.GetVariantSelection()
+        sel_dst = dst_var.GetVariantSelection()
+        if sel_src != sel_dst:
+            errors.append(f"Variant selection mismatch in '{name}' at {src_prim.GetPath()}: "
+                          f"src='{sel_src}' vs dst='{sel_dst}'")
 
         # dive into each variant for recursive validation
-        for variant in sVars & dVars:
-            sV.SetVariantSelection(variant)
-            dV.SetVariantSelection(variant)
-            for child in srcPrim.GetChildren():
-                dstChild = dstPrim.GetChild(child.GetName())
-                if not dstChild:
+        for variant in src_vars & dst_vars:
+            src_var.SetVariantSelection(variant)
+            dst_var.SetVariantSelection(variant)
+            for child in src_prim.GetChildren():
+                dst_child = dst_prim.GetChild(child.GetName())
+                if not dst_child:
                     errors.append(f"Missing child '{child.GetName()}' under variant "
-                                  f"'{variant}' at {srcPrim.GetPath()}")
+                                  f"'{variant}' at {src_prim.GetPath()}")
                 else:
-                    validate_prim(child, dstChild, errors)
+                    validate_prim(child, dst_child, errors)
 
-def validate_prim(srcPrim, dstPrim, errors):
+
+def validate_prim(src_prim, dst_prim, errors):
     """
     Recursively validate a prim and its subtree for type, metadata,
     relationships, variants, and children.
     """
-    if not dstPrim or not dstPrim.IsValid():
-        errors.append(f"Missing prim: {srcPrim.GetPath()}")
+    if not dst_prim or not dst_prim.IsValid():
+        errors.append(f"Missing prim: {src_prim.GetPath()}")
         return
 
     # type name
-    t1 = srcPrim.GetTypeName()
-    t2 = dstPrim.GetTypeName()
+    t1 = src_prim.GetTypeName()
+    t2 = dst_prim.GetTypeName()
     if t1 != t2:
-        errors.append(f"Type mismatch at {srcPrim.GetPath()}: src={t1} vs dst={t2}")
+        errors.append(f"Type mismatch at {src_prim.GetPath()}: src={t1} vs dst={t2}")
 
-    validate_metadata(srcPrim, dstPrim, errors)
-    validate_relationships(srcPrim, dstPrim, errors)
-    validate_variant_sets(srcPrim, dstPrim, errors)
+    validate_metadata(src_prim, dst_prim, errors)
+    validate_relationships(src_prim, dst_prim, errors)
+    validate_variant_sets(src_prim, dst_prim, errors)
 
     # default children
-    for child in srcPrim.GetChildren():
-        validate_prim(child, dstPrim.GetChild(child.GetName()), errors)
+    for child in src_prim.GetChildren():
+        validate_prim(child, dst_prim.GetChild(child.GetName()), errors)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -140,20 +144,20 @@ def main():
 
     # open stages
     try:
-        stageA = Usd.Stage.Open(args.inputA)
-        stageB = Usd.Stage.Open(args.inputB)
-        stageC = Usd.Stage.Open(args.composed)
+        stage_a = Usd.Stage.Open(args.inputA)
+        stage_b = Usd.Stage.Open(args.inputB)
+        stage_c = Usd.Stage.Open(args.composed)
     except Exception as e:
         print("Failed to open USD stages:", e, file=sys.stderr)
         sys.exit(2)
 
     errors = []
 
-    for label, stage in (("A", stageA), ("B", stageB)):
+    for _, stage in (("A", stage_a), ("B", stage_b)):
         pseudo = stage.GetPseudoRoot()
         for prim in pseudo.GetChildren():
-            dstPrim = stageC.GetPrimAtPath(prim.GetPath())
-            validate_prim(prim, dstPrim, errors)
+            dst_prim = stage_c.GetPrimAtPath(prim.GetPath())
+            validate_prim(prim, dst_prim, errors)
 
     if errors:
         print("\nValidation FAILED with the following errors:\n")
@@ -163,6 +167,7 @@ def main():
     else:
         print("\nValidation PASSED: composed USD contains all expected data.\n")
         sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

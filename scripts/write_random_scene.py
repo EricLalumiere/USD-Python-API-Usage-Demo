@@ -112,11 +112,11 @@ def write_usd(output_path):
     # 4) Animated camera
     cam = UsdGeom.Camera.Define(stage, f'/World/Camera_{uniq}')
     cam.CreateFocalLengthAttr(random.uniform(30.0, 70.0))
-    xformOp = cam.AddTranslateOp()
+    xform_op = cam.AddTranslateOp()
     for frame in range(int(stage.GetEndTimeCode()) + 1):
         t = frame / stage.GetEndTimeCode()
         x = Gf.Lerp(-10.0, 10.0, t)
-        xformOp.Set(Gf.Vec3d(x, 5.0, 20.0), time=frame)
+        xform_op.Set(Gf.Vec3d(x, 5.0, 20.0), time=frame)
 
     # 5) Save
     stage.GetRootLayer().Save()
