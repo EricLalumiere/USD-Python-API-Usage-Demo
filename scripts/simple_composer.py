@@ -87,6 +87,8 @@ def copy_attributes(src_prim, dst_prim):
         name = src_attr.GetName()
         type_name = src_attr.GetTypeName()
         value = src_attr.Get()
+        variability = src_attr.GetVariability()
+        is_custom = src_attr.IsCustom()
         if not value:
             LOGGER.debug("[A][%s]->[%s] Skipping empty attribute '%s' [%s]" % (
                 src_prim.GetPath(),
@@ -103,7 +105,10 @@ def copy_attributes(src_prim, dst_prim):
             src_attr.GetTypeName()))
 
         # Create or get matching attr on dst
-        dst_attr = dst_prim.CreateAttribute(name, type_name, custom=False)
+        dst_attr = dst_prim.CreateAttribute(name,
+                                            type_name,
+                                            variability=variability,
+                                            custom=is_custom)
         dst_attr.Set(value)
 
         LOGGER.debug("Resulting value: %s [%s]\n" % (dst_attr.Get(),
